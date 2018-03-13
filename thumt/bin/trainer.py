@@ -169,8 +169,8 @@ def merge_parameters(params1, params2):
 def override_parameters(params, args):
     params.model = args.model
     params.input = args.input or params.input
-    params.context = args.context or params.context
     params.output = args.output or params.output
+    params.context = args.context or params.context
     params.record = args.record or params.record
     params.vocab = args.vocabulary or params.vocab
     params.validation = args.validation or params.validation

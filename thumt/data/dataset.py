@@ -176,7 +176,7 @@ def get_training_input_contextual(filenames, filename_ctx, params):
     with tf.device("/cpu:0"):
         src_dataset = tf.data.TextLineDataset(filenames[0])
         tgt_dataset = tf.data.TextLineDataset(filenames[1])
-        ctx_dataset = tf.data.TextLineDataset(filename_ctx[1])
+        ctx_dataset = tf.data.TextLineDataset(filename_ctx)
 
         dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset, ctx_dataset))
         dataset = dataset.shuffle(params.buffer_size)
@@ -210,7 +210,7 @@ def get_training_input_contextual(filenames, filename_ctx, params):
                 "context": ctx,
                 "source_length": tf.shape(src),
                 "target_length": tf.shape(tgt),
-                "context_length": tf.shape(ctx)，
+                "context_length": tf.shape(ctx)
             },
             num_parallel_calls=params.num_threads
         )
