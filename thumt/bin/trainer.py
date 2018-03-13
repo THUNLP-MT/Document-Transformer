@@ -58,7 +58,7 @@ def default_parameters():
         input=["", ""],
         output="",
         record="",
-        model="transformer",
+        model="contextual_transformer",
         vocab=["", ""],
         # Default training hyper parameters
         num_threads=6,

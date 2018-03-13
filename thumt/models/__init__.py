@@ -8,6 +8,7 @@ from __future__ import print_function
 import thumt.models.seq2seq
 import thumt.models.rnnsearch
 import thumt.models.transformer
+import thumt.models.contextual_transformer
 
 
 def get_model(name):
@@ -19,5 +20,7 @@ def get_model(name):
         return thumt.models.seq2seq.Seq2Seq
     elif name == "transformer":
         return thumt.models.transformer.Transformer
+    elif name == "contextual_transformer":
+        return thumt.models.contextual_transformer.Contextual_Transformer
     else:
         raise LookupError("Unknown model %s" % name)
