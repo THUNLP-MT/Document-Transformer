@@ -33,6 +33,8 @@ def parse_args(args=None):
     # input files
     parser.add_argument("--input", type=str, nargs=2,
                         help="Path of source and target corpus")
+    parser.add_argument("--context", type=str,
+                        help="Path of context corpus")
     parser.add_argument("--record", type=str,
                         help="Path to tf.Record data")
     parser.add_argument("--output", type=str, default="train",
@@ -56,6 +58,7 @@ def parse_args(args=None):
 def default_parameters():
     params = tf.contrib.training.HParams(
         input=["", ""],
+        context= "",
         output="",
         record="",
         model="contextual_transformer",
@@ -166,6 +169,7 @@ def merge_parameters(params1, params2):
 def override_parameters(params, args):
     params.model = args.model
     params.input = args.input or params.input
+    params.context = args.context or params.context
     params.output = args.output or params.output
     params.record = args.record or params.record
     params.vocab = args.vocabulary or params.vocab
@@ -298,7 +302,8 @@ def main(args):
     with tf.Graph().as_default():
         if not params.record:
             # Build input queue
-            features = dataset.get_training_input(params.input, params)
+            #features = dataset.get_training_input(params.input, params)
+            features = dataset.get_training_input_contextual(params.input, params.context, params)
         else:
             features = record.get_input_features(
                 os.path.join(params.record, "*train*"), "train", params
