@@ -99,20 +99,21 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
                     x = _layer_process(x, params.layer_postprocess)
 
-                with tf.variable_scope("ctxenc_attention"):
-                    y = layers.attention.multihead_attention(
-                        _layer_process(x, params.layer_preprocess),
-                        memory_ctx,
-                        bias_ctx,
-                        params.num_heads,
-                        params.attention_key_channels or params.hidden_size,
-                        params.attention_value_channels or params.hidden_size,
-                        params.hidden_size,
-                        1.0 - params.attention_dropout,
-                    )
-                    y = y["outputs"]
-                    x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                if params.context_encoder_attention:
+                    with tf.variable_scope("ctxenc_attention"):
+                        y = layers.attention.multihead_attention(
+                            _layer_process(x, params.layer_preprocess),
+                            memory_ctx,
+                            bias_ctx,
+                            params.num_heads,
+                            params.attention_key_channels or params.hidden_size,
+                            params.attention_value_channels or params.hidden_size,
+                            params.hidden_size,
+                            1.0 - params.attention_dropout,
+                        )
+                        y = y["outputs"]
+                        x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                        x = _layer_process(x, params.layer_postprocess)
 
                 with tf.variable_scope("feed_forward"):
                     y = _ffn_layer(
@@ -129,8 +130,8 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
         return outputs
 
 
-def transformer_decoder(inputs, memory, bias, mem_bias, params, state=None,
-                        dtype=None, scope=None):
+def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx, 
+                        params, state=None, dtype=None, scope=None):
     with tf.variable_scope(scope, default_name="decoder", dtype=dtype,
                            values=[inputs, memory, bias, mem_bias]):
         x = inputs
@@ -159,6 +160,22 @@ def transformer_decoder(inputs, memory, bias, mem_bias, params, state=None,
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
                     x = _layer_process(x, params.layer_postprocess)
+
+                if params.context_decoder_attention:
+                    with tf.variable_scope("ctxdec_attention"):
+                        y = layers.attention.multihead_attention(
+                            _layer_process(x, params.layer_preprocess),
+                            memory_ctx,
+                            ctx_bias,
+                            params.num_heads,
+                            params.attention_key_channels or params.hidden_size,
+                            params.attention_value_channels or params.hidden_size,
+                            params.hidden_size,
+                            1.0 - params.attention_dropout,
+                        )
+                        y = y["outputs"]
+                        x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                        x = _layer_process(x, params.layer_postprocess)
 
                 with tf.variable_scope("encdec_attention"):
                     y = layers.attention.multihead_attention(
@@ -257,7 +274,10 @@ def encoding_graph(features, mode, params):
         keep_prob = 1.0 - params.residual_dropout
         encoder_input = tf.nn.dropout(encoder_input, keep_prob)
 
-    encoder_output = transformer_encoder(encoder_input, context_input, enc_attn_bias, ctx_attn_bias, params)
+    if params.context_encoder_attention:
+        encoder_output = transformer_encoder(encoder_input, context_input, enc_attn_bias, ctx_attn_bias, params)
+    else:
+        encoder_output = transformer_encoder(encoder_input, None, enc_attn_bias, None, params)
 
     return context_output, encoder_output
 
@@ -311,6 +331,7 @@ def decoding_graph(features, state, mode, params):
 
     # Preparing encoder and decoder input
     enc_attn_bias = layers.attention.attention_bias(src_mask, "masking")
+    ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
     dec_attn_bias = layers.attention.attention_bias(tf.shape(targets)[1],
                                                     "causal")
     # Shift left
@@ -322,10 +343,16 @@ def decoding_graph(features, state, mode, params):
         decoder_input = tf.nn.dropout(decoder_input, keep_prob)
 
     encoder_output = state["encoder"]
+    context_output = state["context"]
 
     if mode != "infer":
-        decoder_output = transformer_decoder(decoder_input, encoder_output,
-                                             dec_attn_bias, enc_attn_bias,
+        if params.context_decoder_attention:
+            decoder_output = transformer_decoder(decoder_input, encoder_output, context_output
+                                             dec_attn_bias, enc_attn_bias, ctx_attn_bias
+                                             params)
+        else:
+            decoder_output = transformer_decoder(decoder_input, encoder_output, None,
+                                             dec_attn_bias, enc_attn_bias, None,
                                              params)
     else:
         decoder_input = decoder_input[:, -1:, :]
@@ -472,6 +499,9 @@ class Contextual_Transformer(interface.NMTModel):
             multiply_embedding_mode="sqrt_depth",
             shared_embedding_and_softmax_weights=False,
             shared_source_target_embedding=False,
+            # contextual 
+            context_encoder_attention = True,
+            context_decoder_attention = True,
             # Override default parameters
             learning_rate_decay="linear_warmup_rsqrt_decay",
             initializer="uniform_unit_scaling",
