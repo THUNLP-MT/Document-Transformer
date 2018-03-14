@@ -166,7 +166,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                         y = layers.attention.multihead_attention(
                             _layer_process(x, params.layer_preprocess),
                             memory_ctx,
-                            ctx_bias,
+                            bias_ctx,
                             params.num_heads,
                             params.attention_key_channels or params.hidden_size,
                             params.attention_value_channels or params.hidden_size,
@@ -347,8 +347,8 @@ def decoding_graph(features, state, mode, params):
 
     if mode != "infer":
         if params.context_decoder_attention:
-            decoder_output = transformer_decoder(decoder_input, encoder_output, context_output
-                                             dec_attn_bias, enc_attn_bias, ctx_attn_bias
+            decoder_output = transformer_decoder(decoder_input, encoder_output, context_output,
+                                             dec_attn_bias, enc_attn_bias, ctx_attn_bias,
                                              params)
         else:
             decoder_output = transformer_decoder(decoder_input, encoder_output, None,
