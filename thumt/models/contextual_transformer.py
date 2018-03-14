@@ -43,8 +43,42 @@ def _ffn_layer(inputs, hidden_size, output_size, keep_prob=None,
 
         return output
 
+def transformer_context(inputs, bias, params, dtype=None, scope=None):
+    with tf.variable_scope(scope, default_name="context", dtype=dtype,
+                           values=[inputs, bias]):
+        x = inputs
+        for layer in range(params.num_context_layers):
+            with tf.variable_scope("layer_%d" % layer):
+                with tf.variable_scope("self_attention"):
+                    y = layers.attention.multihead_attention(
+                        _layer_process(x, params.layer_preprocess),
+                        None,
+                        bias,
+                        params.num_heads,
+                        params.attention_key_channels or params.hidden_size,
+                        params.attention_value_channels or params.hidden_size,
+                        params.hidden_size,
+                        1.0 - params.attention_dropout
+                    )
+                    y = y["outputs"]
+                    x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                    x = _layer_process(x, params.layer_postprocess)
 
-def transformer_encoder(inputs, bias, params, dtype=None, scope=None):
+                with tf.variable_scope("feed_forward"):
+                    y = _ffn_layer(
+                        _layer_process(x, params.layer_preprocess),
+                        params.filter_size,
+                        params.hidden_size,
+                        1.0 - params.relu_dropout,
+                    )
+                    x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                    x = _layer_process(x, params.layer_postprocess)
+
+        outputs = _layer_process(x, params.layer_preprocess)
+
+        return outputs
+
+def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, scope=None):
     with tf.variable_scope(scope, default_name="encoder", dtype=dtype,
                            values=[inputs, bias]):
         x = inputs
@@ -60,6 +94,21 @@ def transformer_encoder(inputs, bias, params, dtype=None, scope=None):
                         params.attention_value_channels or params.hidden_size,
                         params.hidden_size,
                         1.0 - params.attention_dropout
+                    )
+                    y = y["outputs"]
+                    x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                    x = _layer_process(x, params.layer_postprocess)
+
+                with tf.variable_scope("ctxenc_attention"):
+                    y = layers.attention.multihead_attention(
+                        _layer_process(x, params.layer_preprocess),
+                        memory_ctx,
+                        bias_ctx,
+                        params.num_heads,
+                        params.attention_key_channels or params.hidden_size,
+                        params.attention_value_channels or params.hidden_size,
+                        params.hidden_size,
+                        1.0 - params.attention_dropout,
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -153,9 +202,14 @@ def encoding_graph(features, mode, params):
 
     hidden_size = params.hidden_size
     src_seq = features["source"]
+    ctx_seq = features["context"]
     src_len = features["source_length"]
+    ctx_len = features["context_length"]
     src_mask = tf.sequence_mask(src_len,
                                 maxlen=tf.shape(features["source"])[1],
+                                dtype=tf.float32)
+    ctx_mask = tf.sequence_mask(ctx_len,
+                                maxlen=tf.shape(features["context"])[1],
                                 dtype=tf.float32)
 
     svocab = params.vocabulary["source"]
@@ -171,6 +225,20 @@ def encoding_graph(features, mode, params):
                                         [src_vocab_size, hidden_size],
                                         initializer=initializer)
 
+    ## context
+    ctx_bias = tf.get_variable("context_bias", [hidden_size])
+
+    # ctx_seq: [batch, max_ctx_length]
+    ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
+    ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
+
+    context_input = tf.nn.bias_add(ctx_inputs, ctx_bias)
+    context_input = layers.attention.add_timing_signal(context_input)
+    ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
+
+    context_output = transformer_context(context_input, ctx_attn_bias, params)
+
+    ## encoder
     bias = tf.get_variable("bias", [hidden_size])
 
     # id => embedding
@@ -187,7 +255,7 @@ def encoding_graph(features, mode, params):
         keep_prob = 1.0 - params.residual_dropout
         encoder_input = tf.nn.dropout(encoder_input, keep_prob)
 
-    encoder_output = transformer_encoder(encoder_input, enc_attn_bias, params)
+    encoder_output = transformer_encoder(encoder_input, context_input, enc_attn_bias, ctx_attn_bias, params)
 
     return encoder_output
 
@@ -202,11 +270,15 @@ def decoding_graph(features, state, mode, params):
     tgt_seq = features["target"]
     src_len = features["source_length"]
     tgt_len = features["target_length"]
+    ctx_len = features["context_length"]
     src_mask = tf.sequence_mask(src_len,
                                 maxlen=tf.shape(features["source"])[1],
                                 dtype=tf.float32)
     tgt_mask = tf.sequence_mask(tgt_len,
                                 maxlen=tf.shape(features["target"])[1],
+                                dtype=tf.float32)
+    ctx_mask = tf.sequence_mask(ctx_len,
+                                maxlen=tf.shape(features["context"])[1],
                                 dtype=tf.float32)
 
     hidden_size = params.hidden_size
@@ -385,6 +457,7 @@ class Contextual_Transformer(interface.NMTModel):
             hidden_size=512,
             filter_size=2048,
             num_heads=8,
+            num_context_layers=6,
             num_encoder_layers=6,
             num_decoder_layers=6,
             attention_dropout=0.0,
