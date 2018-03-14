@@ -229,6 +229,7 @@ def encoding_graph(features, mode, params):
     ctx_bias = tf.get_variable("context_bias", [hidden_size])
 
     # ctx_seq: [batch, max_ctx_length]
+    print("building context graph")
     ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
     ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
 
@@ -243,6 +244,7 @@ def encoding_graph(features, mode, params):
 
     # id => embedding
     # src_seq: [batch, max_src_length]
+    print("building encoder graph")
     inputs = tf.gather(src_embedding, src_seq) * (hidden_size ** 0.5)
     inputs = inputs * tf.expand_dims(src_mask, -1)
 
@@ -257,7 +259,7 @@ def encoding_graph(features, mode, params):
 
     encoder_output = transformer_encoder(encoder_input, context_input, enc_attn_bias, ctx_attn_bias, params)
 
-    return encoder_output
+    return context_output, encoder_output
 
 
 def decoding_graph(features, state, mode, params):
@@ -363,9 +365,10 @@ def decoding_graph(features, state, mode, params):
 
 
 def model_graph(features, mode, params):
-    encoder_output = encoding_graph(features, mode, params)
+    context_output, encoder_output = encoding_graph(features, mode, params)
     state = {
-        "encoder": encoder_output
+        "encoder": encoder_output,
+        "context": context_output
     }
     output = decoding_graph(features, state, mode, params)
 
