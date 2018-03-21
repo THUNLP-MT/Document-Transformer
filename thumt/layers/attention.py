@@ -325,7 +325,7 @@ def multihead_attention(queries, memories, bias, num_heads, key_size,
         else:
             q = linear(queries, key_size, True, True, scope="q_transform", trainable=trainable)
             combined = linear(memories, key_size + value_size, True,
-                              scope="kv_transform")
+                              scope="kv_transform", trainable=trainable)
             k, v = tf.split(combined, [key_size, value_size], axis=-1)
 
         # split heads

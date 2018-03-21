@@ -12,7 +12,7 @@ import thumt.interface as interface
 import thumt.layers as layers
 
 
-def _layer_process(x, mode, trainable=trainable):
+def _layer_process(x, mode, trainable=True):
     if not mode or mode == "none":
         return x
     elif mode == "layer_norm":
