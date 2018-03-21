@@ -276,7 +276,7 @@ def multiplicative_attention(queries, keys, values, bias, keep_prob=None,
 
 def multihead_attention(queries, memories, bias, num_heads, key_size,
                         value_size, output_size, keep_prob=None, output=True,
-                        state=None, dtype=None, scope=None):
+                        state=None, dtype=None, scope=None, trainable=True):
     """ Multi-head scaled-dot-product attention with input/output
         transformations.
 
@@ -313,7 +313,7 @@ def multihead_attention(queries, memories, bias, num_heads, key_size,
         if memories is None:
             # self attention
             size = key_size * 2 + value_size
-            combined = linear(queries, size, True, True, scope="qkv_transform")
+            combined = linear(queries, size, True, True, scope="qkv_transform", trainable=trainable)
             q, k, v = tf.split(combined, [key_size, key_size, value_size],
                                axis=-1)
 
@@ -323,7 +323,7 @@ def multihead_attention(queries, memories, bias, num_heads, key_size,
                 next_state["key"] = k
                 next_state["value"] = v
         else:
-            q = linear(queries, key_size, True, True, scope="q_transform")
+            q = linear(queries, key_size, True, True, scope="q_transform", trainable=trainable)
             combined = linear(memories, key_size + value_size, True,
                               scope="kv_transform")
             k, v = tf.split(combined, [key_size, value_size], axis=-1)
@@ -346,7 +346,7 @@ def multihead_attention(queries, memories, bias, num_heads, key_size,
 
         if output:
             outputs = linear(x, output_size, True, True,
-                             scope="output_transform")
+                             scope="output_transform", trainable=trainable)
         else:
             outputs = x
 

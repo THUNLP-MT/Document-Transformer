@@ -28,18 +28,18 @@ def _residual_fn(x, y, keep_prob=None):
 
 
 def _ffn_layer(inputs, hidden_size, output_size, keep_prob=None,
-              dtype=None, scope=None):
+              dtype=None, scope=None, trainable=True):
     with tf.variable_scope(scope, default_name="ffn_layer", values=[inputs],
                            dtype=dtype):
         with tf.variable_scope("input_layer"):
-            hidden = layers.nn.linear(inputs, hidden_size, True, True)
+            hidden = layers.nn.linear(inputs, hidden_size, True, True, trainable=trainable)
             hidden = tf.nn.relu(hidden)
 
         if keep_prob and keep_prob < 1.0:
             hidden = tf.nn.dropout(hidden, keep_prob)
 
         with tf.variable_scope("output_layer"):
-            output = layers.nn.linear(hidden, output_size, True, True)
+            output = layers.nn.linear(hidden, output_size, True, True, trainable=trainable)
 
         return output
 
@@ -58,7 +58,8 @@ def transformer_context(inputs, bias, params, dtype=None, scope=None):
                         params.attention_key_channels or params.hidden_size,
                         params.attention_value_channels or params.hidden_size,
                         params.hidden_size,
-                        1.0 - params.attention_dropout
+                        1.0 - params.attention_dropout,
+                        trainable=True
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -70,6 +71,7 @@ def transformer_context(inputs, bias, params, dtype=None, scope=None):
                         params.filter_size,
                         params.hidden_size,
                         1.0 - params.relu_dropout,
+                        trainable=True
                     )
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
                     x = _layer_process(x, params.layer_postprocess)
@@ -93,7 +95,8 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                         params.attention_key_channels or params.hidden_size,
                         params.attention_value_channels or params.hidden_size,
                         params.hidden_size,
-                        1.0 - params.attention_dropout
+                        1.0 - params.attention_dropout,
+                        trainable=False
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -110,6 +113,7 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                             params.attention_value_channels or params.hidden_size,
                             params.hidden_size,
                             1.0 - params.attention_dropout,
+                            trainable=True
                         )
                         y = y["outputs"]
                         x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -121,6 +125,7 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                         params.filter_size,
                         params.hidden_size,
                         1.0 - params.relu_dropout,
+                        trainable=False
                     )
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
                     x = _layer_process(x, params.layer_postprocess)
@@ -151,7 +156,8 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                         params.attention_value_channels or params.hidden_size,
                         params.hidden_size,
                         1.0 - params.attention_dropout,
-                        state=layer_state
+                        state=layer_state,
+                        trainable=False
                     )
 
                     if layer_state is not None:
@@ -172,6 +178,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                             params.attention_value_channels or params.hidden_size,
                             params.hidden_size,
                             1.0 - params.attention_dropout,
+                            trainable=True
                         )
                         y = y["outputs"]
                         x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -187,6 +194,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                         params.attention_value_channels or params.hidden_size,
                         params.hidden_size,
                         1.0 - params.attention_dropout,
+                        trainable=False
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -198,6 +206,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                         params.filter_size,
                         params.hidden_size,
                         1.0 - params.relu_dropout,
+                        trainable=False
                     )
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
                     x = _layer_process(x, params.layer_postprocess)
@@ -236,14 +245,14 @@ def encoding_graph(features, mode, params):
     if params.shared_source_target_embedding:
         src_embedding = tf.get_variable("weights",
                                         [src_vocab_size, hidden_size],
-                                        initializer=initializer)
+                                        initializer=initializer, trainable=False)
     else:
         src_embedding = tf.get_variable("source_embedding",
                                         [src_vocab_size, hidden_size],
-                                        initializer=initializer)
+                                        initializer=initializer, trainable=False)
 
     ## context
-    ctx_bias = tf.get_variable("context_bias", [hidden_size])
+    ctx_bias = tf.get_variable("context_bias", [hidden_size], trainable=False)
 
     # ctx_seq: [batch, max_ctx_length]
     print("building context graph")
@@ -257,7 +266,7 @@ def encoding_graph(features, mode, params):
     context_output = transformer_context(context_input, ctx_attn_bias, params)
 
     ## encoder
-    bias = tf.get_variable("bias", [hidden_size])
+    bias = tf.get_variable("bias", [hidden_size], trainable=False)
 
     # id => embedding
     # src_seq: [batch, max_src_length]
@@ -312,17 +321,17 @@ def decoding_graph(features, state, mode, params):
         with tf.variable_scope(tf.get_variable_scope(), reuse=True):
             tgt_embedding = tf.get_variable("weights",
                                             [tgt_vocab_size, hidden_size],
-                                            initializer=initializer)
+                                            initializer=initializer, trainable=False)
     else:
         tgt_embedding = tf.get_variable("target_embedding",
                                         [tgt_vocab_size, hidden_size],
-                                        initializer=initializer)
+                                        initializer=initializer, trainable=False)
 
     if params.shared_embedding_and_softmax_weights:
         weights = tgt_embedding
     else:
         weights = tf.get_variable("softmax", [tgt_vocab_size, hidden_size],
-                                  initializer=initializer)
+                                  initializer=initializer, trainable=False)
 
     # id => embedding
     # tgt_seq: [batch, max_tgt_length]
