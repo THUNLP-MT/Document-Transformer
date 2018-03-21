@@ -12,11 +12,11 @@ import thumt.interface as interface
 import thumt.layers as layers
 
 
-def _layer_process(x, mode):
+def _layer_process(x, mode, trainable=trainable):
     if not mode or mode == "none":
         return x
     elif mode == "layer_norm":
-        return layers.nn.layer_norm(x)
+        return layers.nn.layer_norm(x, trainable=trainable)
     else:
         raise ValueError("Unknown mode %s" % mode)
 
@@ -100,7 +100,7 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                    x = _layer_process(x, params.layer_postprocess, trainable=False)
 
                 if params.context_encoder_attention:
                     with tf.variable_scope("ctxenc_attention"):
@@ -128,7 +128,7 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                         trainable=False
                     )
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                    x = _layer_process(x, params.layer_postprocess, trainable=False)
 
         outputs = _layer_process(x, params.layer_preprocess)
 
@@ -165,7 +165,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
 
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                    x = _layer_process(x, params.layer_postprocess, trainable=False)
 
                 if params.context_decoder_attention:
                     with tf.variable_scope("ctxdec_attention"):
@@ -198,7 +198,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                     )
                     y = y["outputs"]
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                    x = _layer_process(x, params.layer_postprocess, trainable=False)
 
                 with tf.variable_scope("feed_forward"):
                     y = _ffn_layer(
@@ -209,7 +209,7 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                         trainable=False
                     )
                     x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                    x = _layer_process(x, params.layer_postprocess)
+                    x = _layer_process(x, params.layer_postprocess, trainable=False)
 
         outputs = _layer_process(x, params.layer_preprocess)
 

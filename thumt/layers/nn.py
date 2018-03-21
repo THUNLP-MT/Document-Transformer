@@ -89,7 +89,7 @@ def maxout(inputs, output_size, maxpart=2, use_bias=True, concat=True,
     return output
 
 
-def layer_norm(inputs, epsilon=1e-6, dtype=None, scope=None):
+def layer_norm(inputs, epsilon=1e-6, dtype=None, scope=None, trainable=True):
     """
     Layer Normalization
     :param inputs: A Tensor of shape [..., channel_size]
@@ -103,10 +103,10 @@ def layer_norm(inputs, epsilon=1e-6, dtype=None, scope=None):
         channel_size = inputs.get_shape().as_list()[-1]
 
         scale = tf.get_variable("scale", shape=[channel_size],
-                                initializer=tf.ones_initializer())
+                                initializer=tf.ones_initializer(), trainable=trainable)
 
         offset = tf.get_variable("offset", shape=[channel_size],
-                                 initializer=tf.zeros_initializer())
+                                 initializer=tf.zeros_initializer(), trainable=trainable)
 
         mean = tf.reduce_mean(inputs, -1, True)
         variance = tf.reduce_mean(tf.square(inputs - mean), -1, True)
