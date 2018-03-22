@@ -15,7 +15,7 @@ import tensorflow as tf
 import thumt.data.dataset as dataset
 import thumt.data.vocab as vocabulary
 import thumt.models as models
-import thumt.utils.inference as inference
+import thumt.utils.inference_ctx as inference
 import thumt.utils.parallel as parallel
 
 
