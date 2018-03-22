@@ -387,35 +387,29 @@ def get_evaluation_input(inputs, params):
 def get_inference_input_ctx(inputs, ctxs, params):
     with tf.device("/cpu:0"):
         dataset = tf.data.Dataset.from_tensor_slices(
-            tf.constant(inputs),
-            tf.constant(ctxs)
+            tf.constant(inputs)
         )
 
         # Split string
-        dataset = dataset.map(lambda x, ctx: (tf.string_split([x]).values,
-                                              tf.string_split([ctx]).values),
+        dataset = dataset.map(lambda x: tf.string_split([x]).values,
                               num_parallel_calls=params.num_threads)
 
         # Append <eos>
         dataset = dataset.map(
-            lambda x, ctx: (tf.concat([x, [tf.constant(params.eos)]], axis=0),
-                            tf.concat([ctx, [tf.constant(params.eos)]], axis=0)),
+            lambda x: tf.concat([x, [tf.constant(params.eos)]], axis=0),
             num_parallel_calls=params.num_threads
         )
 
         # Convert tuple to dictionary
         dataset = dataset.map(
-            lambda x: {"source": x, "source_length": tf.shape(x)[0],
-                        "context": ctx, "context_length": tf.shape(ctx)[0]},
+            lambda x: {"source": x, "source_length": tf.shape(x)[0]},
             num_parallel_calls=params.num_threads
         )
 
         dataset = dataset.padded_batch(
             params.decode_batch_size * len(params.device_list),
-            {"source": [tf.Dimension(None)], "source_length": [],
-             "context": [tf.Dimension(None)], "context_length": []},
-            {"source": params.pad, "source_length": 0,
-             "context": params.pad, "context_length":0}
+            {"source": [tf.Dimension(None)], "source_length": []},
+            {"source": params.pad, "source_length": 0}
         )
 
         iterator = dataset.make_one_shot_iterator()
@@ -426,7 +420,6 @@ def get_inference_input_ctx(inputs, ctxs, params):
             default_value=params.mapping["source"][params.unk]
         )
         features["source"] = src_table.lookup(features["source"])
-        features["context"] = src_table.lookup(features["context"])
 
         return features
 

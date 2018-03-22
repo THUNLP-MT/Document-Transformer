@@ -246,7 +246,10 @@ def main(args):
         # Read input file
         sorted_keys, sorted_inputs, sorted_ctxs = dataset.sort_input_file_ctx(args.input, args.context)
         # Build input queue
-        features = dataset.get_inference_input_ctx(sorted_inputs, sorted_ctxs, params)
+        features = dataset.get_inference_input(sorted_inputs, params)
+        features_ctx = dataset.get_inference_input(sorted_ctxs, params)
+        features["context"] = features_ctx["source"]
+        features["context_length"] = features_ctx["source_length"]
         # Create placeholders
         placeholders = []
 
@@ -255,7 +258,11 @@ def main(args):
                 "source": tf.placeholder(tf.int32, [None, None],
                                          "source_%d" % i),
                 "source_length": tf.placeholder(tf.int32, [None],
-                                                "source_length_%d" % i)
+                                                "source_length_%d" % i),
+                "context": tf.placeholder(tf.int32, [None, None],
+                                         "context_%d" % i),
+                "context_length": tf.placeholder(tf.int32, [None],
+                                                "context_length_%d" % i)
             })
 
         # A list of outputs
