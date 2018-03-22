@@ -276,6 +276,30 @@ def sort_input_file(filename, reverse=True):
 
     return sorted_keys, sorted_inputs
 
+def sort_input_file_ctx(filename, filename_ctx, reverse=True):
+    # Read file
+    with tf.gfile.Open(filename) as fd:
+        inputs = [line.strip() for line in fd]
+
+    with tf.gfile.Open(filename_ctx) as fd:
+        ctxs = [line.strip() for line in fd]
+
+    input_lens = [
+        (i, len(line.strip().split())) for i, line in enumerate(inputs)
+    ]
+
+    sorted_input_lens = sorted(input_lens, key=operator.itemgetter(1),
+                               reverse=reverse)
+    sorted_keys = {}
+    sorted_inputs = []
+    sorted_ctxs = []
+
+    for i, (index, _) in enumerate(sorted_input_lens):
+        sorted_inputs.append(inputs[index])
+        sorted_ctxs.append(ctxs[index])
+        sorted_keys[index] = i
+
+    return sorted_keys, sorted_inputs, sorted_ctxs
 
 def sort_and_zip_files(names):
     inputs = []
@@ -360,6 +384,51 @@ def get_evaluation_input(inputs, params):
 
     return features
 
+def get_inference_input_ctx(inputs, ctxs, params):
+    with tf.device("/cpu:0"):
+        dataset = tf.data.Dataset.from_tensor_slices(
+            tf.constant(inputs),
+            tf.constant(ctxs)
+        )
+
+        # Split string
+        dataset = dataset.map(lambda x, ctx: (tf.string_split([x]).values,
+                                              tf.string_split([ctx]).values),
+                              num_parallel_calls=params.num_threads)
+
+        # Append <eos>
+        dataset = dataset.map(
+            lambda x, ctx: (tf.concat([x, [tf.constant(params.eos)]], axis=0),
+                            tf.concat([ctx, [tf.constant(params.eos)]], axis=0)),
+            num_parallel_calls=params.num_threads
+        )
+
+        # Convert tuple to dictionary
+        dataset = dataset.map(
+            lambda x: {"source": x, "source_length": tf.shape(x)[0],
+                        "context": ctx, "context_length": tf.shape(ctx)[0]},
+            num_parallel_calls=params.num_threads
+        )
+
+        dataset = dataset.padded_batch(
+            params.decode_batch_size * len(params.device_list),
+            {"source": [tf.Dimension(None)], "source_length": [],
+             "context": [tf.Dimension(None)], "context_length": []},
+            {"source": params.pad, "source_length": 0,
+             "context": params.pad, "context_length":0}
+        )
+
+        iterator = dataset.make_one_shot_iterator()
+        features = iterator.get_next()
+
+        src_table = tf.contrib.lookup.index_table_from_tensor(
+            tf.constant(params.vocabulary["source"]),
+            default_value=params.mapping["source"][params.unk]
+        )
+        features["source"] = src_table.lookup(features["source"])
+        features["context"] = src_table.lookup(features["context"])
+
+        return features
 
 def get_inference_input(inputs, params):
     with tf.device("/cpu:0"):
