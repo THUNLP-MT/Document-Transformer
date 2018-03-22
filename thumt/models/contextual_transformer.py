@@ -366,8 +366,8 @@ def decoding_graph(features, state, mode, params):
     else:
         decoder_input = decoder_input[:, -1:, :]
         dec_attn_bias = dec_attn_bias[:, :, -1:, :]
-        decoder_outputs = transformer_decoder(decoder_input, encoder_output,
-                                              dec_attn_bias, enc_attn_bias,
+        decoder_outputs = transformer_decoder(decoder_input, encoder_output, context_output,
+                                              dec_attn_bias, enc_attn_bias, ctx_attn_bias,
                                               params, state=state["decoder"])
 
         decoder_output, decoder_state = decoder_outputs
@@ -375,7 +375,7 @@ def decoding_graph(features, state, mode, params):
         logits = tf.matmul(decoder_output, weights, False, True)
         log_prob = tf.nn.log_softmax(logits)
 
-        return log_prob, {"encoder": encoder_output, "decoder": decoder_state}
+        return log_prob, {"encoder": encoder_output, "decoder": decoder_state, "context": context_output}
 
     # [batch, length, channel] => [batch * length, vocab_size]
     decoder_output = tf.reshape(decoder_output, [-1, hidden_size])
@@ -452,11 +452,12 @@ class Contextual_Transformer(interface.NMTModel):
                 params = copy.copy(params)
 
             with tf.variable_scope(self._scope):
-                encoder_output = encoding_graph(features, "infer", params)
+                context_output, encoder_output = encoding_graph(features, "infer", params)
                 batch = tf.shape(encoder_output)[0]
 
                 state = {
                     "encoder": encoder_output,
+                    "context": context_output,
                     "decoder": {
                         "layer_%d" % i: {
                             "key": tf.zeros([batch, 0, params.hidden_size]),

@@ -119,13 +119,16 @@ def _gather_2d(params, indices, name=None):
 def _beam_search_step(time, func, state, batch_size, beam_size, alpha,
                       pad_id, eos_id):
     # Compute log probabilities
+    print('st2', state)
     seqs, log_probs = state.inputs[:2]
     flat_seqs = _merge_first_two_dims(seqs)
     flat_state = nest.map_structure(lambda x: _merge_first_two_dims(x),
                                     state.state)
+    print('st3', flat_state)
     step_log_probs, next_state = func(flat_seqs, flat_state)
     step_log_probs = _split_first_two_dims(step_log_probs, batch_size,
                                            beam_size)
+    print('st4', next_state)
     next_state = nest.map_structure(
         lambda x: _split_first_two_dims(x, batch_size, beam_size), next_state)
     curr_log_probs = tf.expand_dims(log_probs, 2) + step_log_probs
@@ -163,6 +166,7 @@ def _beam_search_step(time, func, state, batch_size, beam_size, alpha,
     alive_seqs = tf.concat([alive_seqs, tf.expand_dims(alive_symbols, 2)], 2)
     alive_state = nest.map_structure(lambda x: _gather_2d(x, alive_indices),
                                      next_state)
+    print('st5', alive_state)
     alive_log_probs = alive_scores * length_penalty
 
     # Select finished sequences
@@ -205,6 +209,7 @@ def beam_search(func, state, batch_size, beam_size, max_length, alpha,
         state=state,
         finish=(fin_flags, fin_seqs, fin_scores),
     )
+    print('st1',state)
 
     max_step = tf.reduce_max(max_length)
 
