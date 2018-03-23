@@ -251,22 +251,21 @@ def encoding_graph(features, mode, params):
                                         [src_vocab_size, hidden_size],
                                         initializer=initializer, trainable=False)
 
-    ## context
-    ctx_bias = tf.get_variable("context_bias", [hidden_size], trainable=False)
+    bias = tf.get_variable("bias", [hidden_size], trainable=False)
 
+    ## context
     # ctx_seq: [batch, max_ctx_length]
     print("building context graph")
     ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
     ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
 
-    context_input = tf.nn.bias_add(ctx_inputs, ctx_bias)
+    context_input = tf.nn.bias_add(ctx_inputs, bias)
     context_input = layers.attention.add_timing_signal(context_input)
     ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
 
     context_output = transformer_context(context_input, ctx_attn_bias, params)
 
     ## encoder
-    bias = tf.get_variable("bias", [hidden_size], trainable=False)
 
     # id => embedding
     # src_seq: [batch, max_src_length]
@@ -284,7 +283,7 @@ def encoding_graph(features, mode, params):
         encoder_input = tf.nn.dropout(encoder_input, keep_prob)
 
     if params.context_encoder_attention:
-        encoder_output = transformer_encoder(encoder_input, context_input, enc_attn_bias, ctx_attn_bias, params)
+        encoder_output = transformer_encoder(encoder_input, context_output, enc_attn_bias, ctx_attn_bias, params)
     else:
         encoder_output = transformer_encoder(encoder_input, None, enc_attn_bias, None, params)
 
@@ -510,8 +509,9 @@ class Contextual_Transformer(interface.NMTModel):
             shared_embedding_and_softmax_weights=False,
             shared_source_target_embedding=False,
             # contextual 
-            context_encoder_attention = True,
-            context_decoder_attention = True,
+            context_encoder_attention=True,
+            context_decoder_attention=True,
+            context_gating=False,
             # Override default parameters
             learning_rate_decay="linear_warmup_rsqrt_decay",
             initializer="uniform_unit_scaling",
