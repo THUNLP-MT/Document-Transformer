@@ -274,7 +274,7 @@ def main(args):
         # Create assign ops
         assign_ops = []
 
-        all_var_list = tf.trainable_variables()
+        all_var_list = tf.all_variables()
 
         for i in range(len(args.checkpoints)):
             un_init_var_list = []
