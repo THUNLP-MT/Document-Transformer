@@ -26,6 +26,15 @@ def _residual_fn(x, y, keep_prob=None):
         y = tf.nn.dropout(y, keep_prob)
     return x + y
 
+def _residual_gating_fn(x, y, keep_prob=None):
+    with tf.variable_scope("gating_x"):
+        gating_x = layers.nn.linear(x, params.hidden_size, False)
+    with tf.variable_scope("gating_y"):
+        gating_y = layers.nn.linear(inputs, params.hidden_size, False)
+    gate = tf.sigmoid(gating_x+gating_y) 
+    #if keep_prob and keep_prob < 1.0:
+    #    y = tf.nn.dropout(y, keep_prob)
+    return gate*x+(1-gate)*y
 
 def _ffn_layer(inputs, hidden_size, output_size, keep_prob=None,
               dtype=None, scope=None, trainable=True):
@@ -116,8 +125,15 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                             trainable=True
                         )
                         y = y["outputs"]
-                        x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                        x = _layer_process(x, params.layer_postprocess)
+
+                        if context_gating:
+                            x = _residual_gating_fn(x, y, 1.0 - params.residual_dropout)
+                            x = _layer_process(x, params.layer_postprocess)
+                        else:
+                            x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                            x = _layer_process(x, params.layer_postprocess)
+
+
 
                 with tf.variable_scope("feed_forward"):
                     y = _ffn_layer(
@@ -181,8 +197,12 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                             trainable=True
                         )
                         y = y["outputs"]
-                        x = _residual_fn(x, y, 1.0 - params.residual_dropout)
-                        x = _layer_process(x, params.layer_postprocess)
+                        if context_gating:
+                            x = _residual_gating_fn(x, y, 1.0 - params.residual_dropout)
+                            x = _layer_process(x, params.layer_postprocess)
+                        else:
+                            x = _residual_fn(x, y, 1.0 - params.residual_dropout)
+                            x = _layer_process(x, params.layer_postprocess)
 
                 with tf.variable_scope("encdec_attention"):
                     y = layers.attention.multihead_attention(
