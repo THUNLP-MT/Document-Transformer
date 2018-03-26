@@ -26,11 +26,11 @@ def _residual_fn(x, y, keep_prob=None):
         y = tf.nn.dropout(y, keep_prob)
     return x + y
 
-def _residual_gating_fn(x, y, keep_prob=None):
+def _residual_gating_fn(x, y, hidden_size, keep_prob=None):
     with tf.variable_scope("gating_x"):
-        gating_x = layers.nn.linear(x, params.hidden_size, False)
+        gating_x = layers.nn.linear(x, hidden_size, False)
     with tf.variable_scope("gating_y"):
-        gating_y = layers.nn.linear(inputs, params.hidden_size, False)
+        gating_y = layers.nn.linear(y, hidden_size, False)
     gate = tf.sigmoid(gating_x+gating_y) 
     #if keep_prob and keep_prob < 1.0:
     #    y = tf.nn.dropout(y, keep_prob)
@@ -126,8 +126,8 @@ def transformer_encoder(inputs, memory_ctx, bias, bias_ctx, params, dtype=None, 
                         )
                         y = y["outputs"]
 
-                        if context_gating:
-                            x = _residual_gating_fn(x, y, 1.0 - params.residual_dropout)
+                        if params.context_gating:
+                            x = _residual_gating_fn(x, y, params.hidden_size, 1.0 - params.residual_dropout)
                             x = _layer_process(x, params.layer_postprocess)
                         else:
                             x = _residual_fn(x, y, 1.0 - params.residual_dropout)
@@ -197,8 +197,8 @@ def transformer_decoder(inputs, memory, memory_ctx, bias, mem_bias, bias_ctx,
                             trainable=True
                         )
                         y = y["outputs"]
-                        if context_gating:
-                            x = _residual_gating_fn(x, y, 1.0 - params.residual_dropout)
+                        if params.context_gating:
+                            x = _residual_gating_fn(x, y, params.hidden_size, 1.0 - params.residual_dropout)
                             x = _layer_process(x, params.layer_postprocess)
                         else:
                             x = _residual_fn(x, y, 1.0 - params.residual_dropout)
