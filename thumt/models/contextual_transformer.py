@@ -10,6 +10,7 @@ import copy
 import tensorflow as tf
 import thumt.interface as interface
 import thumt.layers as layers
+from tensorflow.contrib import rnn
 
 
 def _layer_process(x, mode, trainable=True):
@@ -51,6 +52,14 @@ def _ffn_layer(inputs, hidden_size, output_size, keep_prob=None,
             output = layers.nn.linear(hidden, output_size, True, True, trainable=trainable)
 
         return output
+
+def birnn(inputs, sequence_length, params):
+    lstm_fw_cell = rnn.BasicLSTMCell(params.hidden_size)
+    lstm_bw_cell = rnn.BasicLSTMCell(params.hidden_size)
+    outputs, states = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, inputs, 
+                                                 sequence_length=sequence_length, dtype=tf.float32)
+    states_fw, states_bw = outputs
+    return tf.concat([states_fw, states_bw], axis=2) 
 
 def transformer_context(inputs, bias, params, dtype=None, scope=None):
     with tf.variable_scope(scope, default_name="context", dtype=dtype,
@@ -276,14 +285,31 @@ def encoding_graph(features, mode, params):
     ## context
     # ctx_seq: [batch, max_ctx_length]
     print("building context graph")
-    ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
-    ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
+    if params.context_representation == "self_attention":
+        print('use self attention')
+        ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
+        ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
 
-    context_input = tf.nn.bias_add(ctx_inputs, bias)
-    context_input = layers.attention.add_timing_signal(context_input)
-    ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
+        context_input = tf.nn.bias_add(ctx_inputs, bias)
+        context_input = layers.attention.add_timing_signal(context_input)
+        ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
 
-    context_output = transformer_context(context_input, ctx_attn_bias, params)
+        context_output = transformer_context(context_input, ctx_attn_bias, params)
+    elif params.context_representation == "embedding":
+        print('use embedding')
+        ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
+        ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
+        context_input = tf.nn.bias_add(ctx_inputs, bias)
+        ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
+        context_output = context_input
+    elif params.context_representation == "bilstm":
+        print('use bilstm')
+        ctx_inputs = tf.gather(src_embedding, ctx_seq) * (hidden_size ** 0.5)
+        ctx_inputs = ctx_inputs * tf.expand_dims(ctx_mask, -1)
+        context_input = tf.nn.bias_add(ctx_inputs, bias)
+        ctx_attn_bias = layers.attention.attention_bias(ctx_mask, "masking")
+        context_output = birnn(context_input, ctx_len, params)
+
 
     ## encoder
 
@@ -516,7 +542,6 @@ class Contextual_Transformer(interface.NMTModel):
             hidden_size=512,
             filter_size=2048,
             num_heads=8,
-            num_context_layers=6,
             num_encoder_layers=6,
             num_decoder_layers=6,
             attention_dropout=0.0,
@@ -532,6 +557,8 @@ class Contextual_Transformer(interface.NMTModel):
             context_encoder_attention=True,
             context_decoder_attention=True,
             context_gating=False,
+            context_representation="self_attention",
+            num_context_layers=6,
             # Override default parameters
             learning_rate_decay="linear_warmup_rsqrt_decay",
             initializer="uniform_unit_scaling",
