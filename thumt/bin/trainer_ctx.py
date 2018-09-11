@@ -33,6 +33,8 @@ def parse_args(args=None):
     # input files
     parser.add_argument("--input", type=str, nargs=2,
                         help="Path of source and target corpus")
+    parser.add_argument("--context", type=str,
+                        help="Path of context corpus")
     parser.add_argument("--record", type=str,
                         help="Path to tf.Record data")
     parser.add_argument("--output", type=str, default="train",
@@ -56,9 +58,10 @@ def parse_args(args=None):
 def default_parameters():
     params = tf.contrib.training.HParams(
         input=["", ""],
+        context= "",
         output="",
         record="",
-        model="transformer",
+        model="contextual_transformer",
         vocab=["", ""],
         # Default training hyper parameters
         num_threads=6,
@@ -66,6 +69,7 @@ def default_parameters():
         max_length=256,
         length_multiplier=1,
         mantissa_bits=2,
+        start_steps=0,
         warmup_steps=4000,
         train_steps=100000,
         buffer_size=10000,
@@ -167,6 +171,7 @@ def override_parameters(params, args):
     params.model = args.model
     params.input = args.input or params.input
     params.output = args.output or params.output
+    params.context = args.context or params.context
     params.record = args.record or params.record
     params.vocab = args.vocabulary or params.vocab
     params.validation = args.validation or params.validation
@@ -220,7 +225,7 @@ def get_initializer(params):
 
 def get_learning_rate_decay(learning_rate, global_step, params):
     if params.learning_rate_decay in ["linear_warmup_rsqrt_decay", "noam"]:
-        step = tf.to_float(global_step)
+        step = tf.to_float(global_step-params.start_steps)
         warmup_steps = tf.to_float(params.warmup_steps)
         multiplier = params.hidden_size ** -0.5
         decay = multiplier * tf.minimum((step + 1) * (warmup_steps ** -1.5),
@@ -298,7 +303,8 @@ def main(args):
     with tf.Graph().as_default():
         if not params.record:
             # Build input queue
-            features = dataset.get_training_input(params.input, params)
+            #features = dataset.get_training_input(params.input, params)
+            features = dataset.get_training_input_contextual(params.input, params.context, params)
         else:
             features = record.get_input_features(
                 os.path.join(params.record, "*train*"), "train", params

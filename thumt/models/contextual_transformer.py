@@ -458,7 +458,7 @@ def model_graph(features, mode, params):
 
 class Contextual_Transformer(interface.NMTModel):
 
-    def __init__(self, params, scope="contextual_transformer"):
+    def __init__(self, params, scope="transformer"):
         super(Contextual_Transformer, self).__init__(params=params, scope=scope)
 
     def get_training_func(self, initializer):
@@ -529,7 +529,7 @@ class Contextual_Transformer(interface.NMTModel):
 
     @staticmethod
     def get_name():
-        return "contextual_transformer"
+        return "transformer"
 
     @staticmethod
     def get_parameters():
