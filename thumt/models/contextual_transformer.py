@@ -563,7 +563,7 @@ class Contextual_Transformer(interface.NMTModel):
             learning_rate_decay="linear_warmup_rsqrt_decay",
             initializer="uniform_unit_scaling",
             initializer_gain=1.0,
-            learning_rate=1.0,
+            learning_rate=0.1,
             layer_preprocess="none",
             layer_postprocess="layer_norm",
             batch_size=4096,

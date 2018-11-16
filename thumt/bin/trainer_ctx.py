@@ -83,7 +83,7 @@ def default_parameters():
         adam_beta2=0.999,
         adam_epsilon=1e-8,
         clip_grad_norm=5.0,
-        learning_rate=1.0,
+        learning_rate=0.1,
         learning_rate_decay="linear_warmup_rsqrt_decay",
         learning_rate_boundaries=[0],
         learning_rate_values=[0.0],
