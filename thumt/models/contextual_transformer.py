@@ -556,7 +556,7 @@ class Contextual_Transformer(interface.NMTModel):
             # contextual 
             context_encoder_attention=True,
             context_decoder_attention=True,
-            context_gating=False,
+            context_gating=True,
             context_representation="self_attention",
             num_context_layers=6,
             # Override default parameters
