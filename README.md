@@ -26,7 +26,7 @@ Note: The usage is not user-friendly. May improve later.
 
 3. Generate the initial model by merging the standard Transformer model into the dummy model, then create a checkpoint file:
 
-<pre><code>python THUMT/thumt/script/combine_add.py --input model_dummy/model.ckpt-0 \
+<pre><code>python THUMT/thumt/script/combine_add.py --model model_dummy/model.ckpt-0 \
                                          --part model_baseline/model.ckpt-30000 --output train
 printf 'model_checkpoint_path: "new-0"\nall_model_checkpoint_paths: "new-0"' > train/checkpoint
 </code></pre>
